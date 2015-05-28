@@ -1,13 +1,19 @@
 Commands:
 
-Set device address to all connected devices
+A - Set device address to all connected devices
 *:*:A:newAddress
 
-Set baudrate
+B - Set baudrate
 X:*:B:baudrate
 
-Set Speed
+S - Set Speed
 X:N:S:FLOAT
 
+X - Set Acceleration
+X:N:X:FLOAT
 
+R - runs the Motor
+X:N:R
 
+H - Halts the motor
+X:N:H
