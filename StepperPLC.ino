@@ -8,7 +8,10 @@
 
 //Motors
 #define DEVICE_MOTORS_INSTALLED 2
-AccelStepper motors[DEVICE_MOTORS_INSTALLED];
+AccelStepper motor[DEVICE_MOTORS_INSTALLED];
+enum MotorStates{stop, constantSpeed, toPosition};
+MotorStates motorState[DEVICE_MOTORS_INSTALLED];
+
 
 //Control LED
 #define LED 13
@@ -29,8 +32,8 @@ byte actMotor=0;
 
 void setup() {
   //Init motors
-  motors[0] = AccelStepper(AccelStepper::FULL4WIRE, 2, 3, 4, 5, true);
-  motors[1] = AccelStepper(AccelStepper::FULL4WIRE, 6, 7, 8, 9, true);
+  motor[0] = AccelStepper(AccelStepper::FULL4WIRE, 2, 3, 4, 5, true);
+  motor[1] = AccelStepper(AccelStepper::FULL4WIRE, 6, 7, 8, 9, true);
 
   
   
@@ -69,8 +72,8 @@ void setup() {
 //Protokoll:
 //Command to Arduino
 //x:y:command:par1:par2\n
-//x: Devicenummer *==All devices
-//y: Motornummer *==all motors, is ignored if command applies to no motor
+//x: Devicenummer 0==All devices
+//y: Motornummer 0==all motors, is ignored if command applies to no motor
 //command: Command
 //par_: parameter
 //\n: Linefeed
@@ -87,13 +90,23 @@ void error(char * c)
   Serial.println(c);
 }
 
+void doSteppers()
+{
+  for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++) 
+   {
+     if (motorState[i]==toPosition) motor[i].run();
+     if (motorState[i]==constantSpeed) motor[i].runSpeed();
+   }
+}
+
+
 void loop() {
   // Get next command from Serial (add 1 for final 0)
   char input[INPUT_SIZE + 1];
   
   
   //Get stuff from uart
-  while (Serial.available()==0){}
+  while (Serial.available()==0){doSteppers();}
   byte size = Serial.readBytes(input, INPUT_SIZE);
     
   //The position in the command:
@@ -151,11 +164,11 @@ void loop() {
             //Get the speed
             part = strtok(NULL, SEPERATOR);
             float speed = atof(part);
-            if (actDevice>0)
+            if (actMotor>0)
             {
-              motors[actDevice-1].setSpeed(speed);
+              motor[actMotor-1].setSpeed(speed);
             }else{
-              for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++) motors[actDevice].setSpeed(speed);
+              for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++) motor[i].setSpeed(speed);
             }
             Serial.print(deviceAddress);
             Serial.print(":");
@@ -163,6 +176,49 @@ void loop() {
             Serial.print(":S:");
             Serial.print(speed);
             Serial.println(":OK");                    
+          }else if (strcmp(part,"X")==0){      //Acceleration
+            //Get the Acceleration
+            part = strtok(NULL, SEPERATOR);
+            float acc = atof(part);
+            if (actMotor>0)
+            {
+              motor[actMotor-1].setAcceleration(acc);
+            }else{
+              for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++) motor[i].setAcceleration(acc);
+            }
+            Serial.print(deviceAddress);
+            Serial.print(":");
+            Serial.print(actMotor);
+            Serial.print(":X:");
+            Serial.print(acc);
+            Serial.println(":OK");                    
+          }else if (strcmp(part,"R")==0){      //RUN
+            if (actMotor>0)
+            {
+              motorState[actMotor-1]=constantSpeed;
+            }else{
+              for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++) motorState[i]=constantSpeed;
+            }
+            Serial.print(deviceAddress);
+            Serial.print(":");
+            Serial.print(actMotor);
+            Serial.println(":R:OK");   
+          }else if (strcmp(part,"H")==0){      //Halt
+            if (actMotor>0)
+            {
+              motor[actMotor-1].stop();
+              motorState[actMotor-1]=stop;
+            }else{
+              for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++)
+             {
+               motor[i].stop();
+               motorState[i]=stop;
+             }
+            }
+            Serial.print(deviceAddress);
+            Serial.print(":");
+            Serial.print(actMotor);
+            Serial.println(":H:OK");   
           }else
           {
             error("UnknownCommand");
