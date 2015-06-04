@@ -9,7 +9,7 @@
 //Motors
 #define DEVICE_MOTORS_INSTALLED 2
 AccelStepper motor[DEVICE_MOTORS_INSTALLED];
-enum MotorStates{stop, constantSpeed, toPosition};
+enum MotorStates{stop=0, constantSpeed=1, toPosition=2};
 MotorStates motorState[DEVICE_MOTORS_INSTALLED];
 
 
@@ -19,6 +19,10 @@ MotorStates motorState[DEVICE_MOTORS_INSTALLED];
 //Memory Addresses
 #define MEMORY_UART_SPEED 0
 #define MEMORY_DEVICE_ADDRESS 4
+#define MEMORY_MOTORSETTINGS_BASE 200
+#define MEMORY_MOTORSETTINGS_OFFSET_PER_MOTOR 20
+#define MEMORY_MOTORSETTINGS_ACC 0
+#define MEMORY_MOTORSETTINGS_SPEED 4
 
 
 //Global vars
@@ -32,15 +36,21 @@ byte actMotor=0;
 
 void setup() {
   //Init motors
-  motor[0] = AccelStepper(AccelStepper::FULL4WIRE, 2, 3, 4, 5, true);
-  motor[1] = AccelStepper(AccelStepper::FULL4WIRE, 6, 7, 8, 9, true);
+  motor[0] = AccelStepper(AccelStepper::DRIVER, 2, 3,  true);
+  motor[1] = AccelStepper(AccelStepper::DRIVER, 4, 5, true);
 
+
+  //Set maximum Speed for motors
+  motor[0].setMaxSpeed(100000);
+  motor[1].setMaxSpeed(100000);
+  
   
   
   //Get UART speed out of memory and set it
   // defaults to 9600
   long baudrate=0;
   EEPROM.get( MEMORY_UART_SPEED, baudrate );
+  Serial.println((long)baudrate);
     switch (baudrate) {
     case    300:
     case    600:
@@ -58,14 +68,14 @@ void setup() {
       break;
     default: 
       Serial.begin(9600);
-      Serial.print("Using default Baudrate!");
+      Serial.println("Using Baudrate 9600!");
   }
   
 
   EEPROM.get( MEMORY_DEVICE_ADDRESS, deviceAddress );
   
   Serial.print( deviceAddress );
-  Serial.print( ":*:OK\n" );
+  Serial.print( ":0:OK\n" );
 
 }
 
@@ -94,8 +104,13 @@ void doSteppers()
 {
   for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++) 
    {
-     if (motorState[i]==toPosition) motor[i].run();
-     if (motorState[i]==constantSpeed) motor[i].runSpeed();
+     if (motorState[i]==toPosition)
+     {
+       if (motor[i].distanceToGo() == 0) motorState[i] = stop; else motor[i].run();
+     } else  if (motorState[i]==constantSpeed) 
+       {
+         motor[i].runSpeed();
+       }
    }
 }
 
@@ -149,17 +164,17 @@ void loop() {
             deviceAddress = atoi(part);
             EEPROM.update( MEMORY_DEVICE_ADDRESS, deviceAddress );
             Serial.print(deviceAddress);
-            Serial.println(":*:A:OK");
+            Serial.println(":0:A:OK");
           }else if (strcmp(part,"B")==0){        //BAUD
             //Get the address
             part = strtok(NULL, SEPERATOR);
             long baudRate = atol(part);
-            EEPROM.update( MEMORY_UART_SPEED, baudRate);
+            EEPROM.put( MEMORY_UART_SPEED, baudRate);
             //Serial.begin(baudRate);
             Serial.print(deviceAddress);
-            Serial.print(":*:B:");
+            Serial.print(":0:B:");
             Serial.print(baudRate);
-            Serial.println(":OK");        
+            Serial.println(":RESET");        
           }else if (strcmp(part,"S")==0){      //SPEED
             //Get the speed
             part = strtok(NULL, SEPERATOR);
@@ -219,21 +234,107 @@ void loop() {
             Serial.print(":");
             Serial.print(actMotor);
             Serial.println(":H:OK");   
+          }else if (strcmp(part,"P")==0){      //Position
+            //Get the Position to set the motor to
+            part = strtok(NULL, SEPERATOR);
+            long pos = atol(part);
+            if (actMotor>0)
+            {
+              motor[actMotor-1].setCurrentPosition(pos);
+            }else{
+              for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++)
+              {
+                motor[i].setCurrentPosition(pos);
+              }
+            }
+            Serial.print(deviceAddress);
+            Serial.print(":");
+            Serial.print(actMotor);
+            Serial.print(":P:");
+            Serial.print(pos);
+            Serial.println(":OK");   
+          }else if (strcmp(part,"M")==0){      //Move to positon
+            //Get the Position to set the motor to
+            part = strtok(NULL, SEPERATOR);
+            long pos = atol(part);
+            if (actMotor>0)
+            {
+              motor[actMotor-1].moveTo(pos);
+              motorState[actMotor-1]=toPosition;
+            }else{
+              for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++)
+              {
+                motor[i].moveTo(pos);
+                motorState[i]=toPosition;
+              }
+            }
+
+            Serial.print(deviceAddress);
+            Serial.print(":");
+            Serial.print(actMotor);
+            Serial.print(":M:");
+            Serial.print(pos);
+            Serial.println(":OK");   
+          }else if (strcmp(part,"G")==0){      //Move this far
+            //Get the Position to set the motor to
+            part = strtok(NULL, SEPERATOR);
+            long pos = atol(part);
+            if (actMotor>0)
+            {
+              motor[actMotor-1].move(pos);
+              motorState[actMotor-1]=toPosition;
+            }else{
+              for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++)
+              {
+                motor[i].move(pos);
+                motorState[i]=toPosition;
+              }
+            }
+
+            Serial.print(deviceAddress);
+            Serial.print(":");
+            Serial.print(actMotor);
+            Serial.print(":G:");
+            Serial.print(pos);
+            Serial.println(":OK");   
+          }else if (strcmp(part,"N")==0){      //Save
+            //Save everything
+
+            for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++)
+            {
+//              EEPROM.put(MEMORY_MOTORSETTINGS_BASE+i*MEMORY_MOTORSETTINGS_OFFSET_PER_MOTOR+ MEMORY_MOTORSETTINGS_ACC,  motor[i].??);
+              EEPROM.put(MEMORY_MOTORSETTINGS_BASE+i*MEMORY_MOTORSETTINGS_OFFSET_PER_MOTOR+ MEMORY_MOTORSETTINGS_SPEED,  motor[i].speed());
+            }
+            Serial.print(deviceAddress);
+            Serial.print(":0:N:OK"); 
+          }else if (strcmp(part,"L")==0){      //LOAD
+            //Save everything
+
+            for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++)
+            {
+              float v=0;
+  //            EEPROM.put(MEMORY_MOTORSETTINGS_BASE+i*MEMORY_MOTORSETTINGS_OFFSET_PER_MOTOR+ MEMORY_MOTORSETTINGS_ACC,  motor[i].??);
+              EEPROM.get(MEMORY_MOTORSETTINGS_BASE+i*MEMORY_MOTORSETTINGS_OFFSET_PER_MOTOR+ MEMORY_MOTORSETTINGS_SPEED, v);
+              motor[i].setSpeed(v);
+            }
+            Serial.print(deviceAddress);
+            Serial.print(":0:L:OK");   
           }else
+
           {
-            error("UnknownCommand");
+            error("UnknownCommand"); 
           } 
         }else{
-          error("UnknownMotor");
+          error("UnknownMotor"); //Motor does not exist
         }
       }else{
-        error("UnknownFormat2");
+        error("UnknownFormat2"); //Parameter missing/wrong
       }
     }else{
-      error("WrongDevice");
+      //error("WrongDevice");    //Not for several devices on one bus!
     }
   }else{
-    error("UnknownFormat1");
+    error("UnknownFormat1");  //Whole line seems wierd
   }
 
 
