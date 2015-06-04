@@ -1,19 +1,62 @@
+This is a simple stepper motor controlver over RS232/USB/... for 
+the arduino platform based on the AccelStepper library.
+
+(C) Jörg-Karl Bösner 2015
+
+The protocoll is as following:
+
+D:M:C:P
+
+D = Device Number, 0 = all devices
+M = Motor Number, 0 = all motors, ignored if not used, but must be present
+C = Command out of the following table
+P = A parameter if used, can be integer / float in international notation
+
+
+The motor pins and driver are hardcoded atm. So please adjust the source!
+
+
 Commands:
 
-A - Set device address to all connected devices
-*:*:A:newAddress
+A - Set device address to all connected devices (dafault 0)
+    0:0:A:newAddress
 
 B - Set baudrate
-X:*:B:baudrate
+    X:0:B:baudrate
 
-S - Set Speed
-X:N:S:FLOAT
+S - Set Speed (default 0)
+    X:N:S:FLOAT
 
-X - Set Acceleration
-X:N:X:FLOAT
+X - Set Acceleration (default 1)
+    X:N:X:FLOAT
 
-R - runs the Motor
-X:N:R
+R - runs the Motor at constant speed
+    X:N:R
 
 H - Halts the motor
-X:N:H
+    X:N:H
+
+P - Sets the actual position
+    X:N:P:FLOAT
+
+M - Moves the Motor to this position at once and stops after that. Uses acceleration. Starts immidiatly.
+    X:N:M:FLOAT
+
+G - Moves the Motor this amount of steps and stops after that. Uses acceleration. Starts immidiatly.
+    X:N:G:FLOAT
+
+    
+=== Depends on the implementation in AccelStepper library ===
+The prototypes are there, but since the lib does not support
+reading back the values set, it is not quite usefull atm.
+    
+N - saves motor setting to non volatile Memory (only speed supported atm)
+    X:0:N
+    
+L - loads motor setting from non volatile Memory (only speed supported atm)
+    X:0:L
+    
+    
+
+
+
