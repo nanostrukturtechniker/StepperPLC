@@ -76,7 +76,21 @@ void setup() {
   
   Serial.print( deviceAddress );
   Serial.print( ":0:OK\n" );
-
+  
+  
+  cli();//stop interrupts
+  //set timer2 
+  TCCR2A = 0;// set entire TCCR2A register to 0
+  TCCR2B = 0;// same for TCCR2B
+  TCNT2  = 0;//initialize counter value to 0
+  OCR2A = 125; // -> 16kHz
+  // turn on CTC mode
+  TCCR2A |= (1 << WGM21);
+  // Set CS21 bit for 8 prescaler
+  TCCR2B |= (1 << CS21);   
+  // enable timer compare interrupt
+  TIMSK2 |= (1 << OCIE2A);
+  sei();//allow interrupts
 }
 
 //Protokoll:
@@ -100,19 +114,23 @@ void error(char * c)
   Serial.println(c);
 }
 
-void doSteppers()
+ISR(TIMER2_COMPA_vect)
 {
+  cli(); //Stop interrupts
   for (int i=0;i<DEVICE_MOTORS_INSTALLED;i++) 
-   {
-     if (motorState[i]==toPosition)
-     {
-       if (motor[i].distanceToGo() == 0) motorState[i] = stop; else motor[i].run();
-     } else  if (motorState[i]==constantSpeed) 
-       {
-         motor[i].runSpeed();
-       }
-   }
+  {
+    if (motorState[i]==toPosition)
+    {
+      if (motor[i].distanceToGo() == 0) motorState[i] = stop; else motor[i].run();
+    } else if (motorState[i]==constantSpeed) 
+    {
+      motor[i].runSpeed();
+    }
+  }
+  sei();//allow interrupts
 }
+
+
 
 
 void loop() {
@@ -121,7 +139,9 @@ void loop() {
   
   
   //Get stuff from uart
-  while (Serial.available()==0){doSteppers();}
+  while (Serial.available()==0){
+    //doSteppers();
+  }
   byte size = Serial.readBytes(input, INPUT_SIZE);
     
   //The position in the command:
